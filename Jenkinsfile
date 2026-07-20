@@ -58,29 +58,38 @@ pipeline {
                 sh 'sleep 15'
 
                 script {
-                    sh '''
+                    // Jenkins corre en su propio contenedor, así que "localhost" no
+                    // apunta a los servicios levantados por docker compose.
+                    // Usamos un contenedor auxiliar conectado a la MISMA red,
+                    // dirigiéndonos por nombre de servicio en vez de localhost.
+                    env.APP_NETWORK = sh(
+                        script: "docker compose -f ${DOCKER_COMPOSE_FILE} ps -q postgres | xargs docker inspect -f '{{range \$k,\$v := .NetworkSettings.Networks}}{{\$k}}{{end}}'",
+                        returnStdout: true
+                    ).trim()
+
+                    sh """
                         echo "Esperando API Gateway..."
-                        timeout 60 sh -c 'while ! curl -s -f http://localhost:3000/health; do sleep 2; done'
+                        timeout 60 sh -c 'until docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -f http://api-gateway:3000/health; do sleep 2; done'
 
                         echo "Esperando User Service..."
-                        timeout 60 sh -c 'while ! curl -s -f http://localhost:3001/health; do sleep 2; done'
+                        timeout 60 sh -c 'until docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -f http://user-service:3001/health; do sleep 2; done'
 
                         echo "Esperando Product Service..."
-                        timeout 60 sh -c 'while ! curl -s -f http://localhost:3002/health; do sleep 2; done'
-                    '''
+                        timeout 60 sh -c 'until docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -f http://product-service:3002/health; do sleep 2; done'
+                    """
                 }
 
                 echo 'Ejecutando pruebas funcionales de integración...'
-                sh '''
+                sh """
                     echo "=== Prueba: crear usuario via gateway ==="
-                    curl -f -X POST http://localhost:3000/users \
+                    docker run --rm --network ${env.APP_NETWORK} curlimages/curl -f -X POST http://api-gateway:3000/users \
                         -H "Content-Type: application/json" \
-                        -d '{"name":"CI Test User","email":"ci-test-'$(date +%s)'@example.com"}'
+                        -d '{"name":"CI Test User","email":"ci-test-'\$(date +%s)'@example.com"}'
 
                     echo ""
                     echo "=== Prueba: listar productos ==="
-                    curl -f http://localhost:3002/products
-                '''
+                    docker run --rm --network ${env.APP_NETWORK} curlimages/curl -f http://product-service:3002/products
+                """
             }
             post {
                 always {
@@ -98,20 +107,21 @@ pipeline {
                 sh 'sleep 15'
 
                 script {
-                    sh '''
-                        timeout 60 sh -c 'while ! curl -s -f http://localhost:3000/health; do sleep 2; done'
-                    '''
-                }
-
-                echo 'Ejecutando pruebas de carga con K6...'
-                script {
                     def networkName = sh(
                         script: "docker compose -f ${DOCKER_COMPOSE_FILE} ps -q postgres | xargs docker inspect -f '{{range \$k,\$v := .NetworkSettings.Networks}}{{\$k}}{{end}}'",
                         returnStdout: true
                     ).trim()
+                    env.APP_NETWORK = networkName
 
                     sh """
-                        docker run --rm --network ${networkName} \
+                        timeout 60 sh -c 'until docker run --rm --network ${networkName} curlimages/curl -s -f http://api-gateway:3000/health; do sleep 2; done'
+                    """
+                }
+
+                echo 'Ejecutando pruebas de carga con K6...'
+                script {
+                    sh """
+                        docker run --rm --network ${env.APP_NETWORK} \
                             -v \$(pwd)/tests/performance:/scripts \
                             grafana/k6 run /scripts/load-test.js
                     """
