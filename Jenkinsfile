@@ -90,6 +90,39 @@ pipeline {
                 }
             }
         }
+
+        stage('Pruebas de Carga y Rendimiento') {
+            steps {
+                echo 'Levantando entorno para pruebas de carga...'
+                sh "docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build"
+                sh 'sleep 15'
+
+                script {
+                    sh '''
+                        timeout 60 sh -c 'while ! curl -s -f http://localhost:3000/health; do sleep 2; done'
+                    '''
+                }
+
+                echo 'Ejecutando pruebas de carga con K6...'
+                script {
+                    def networkName = sh(
+                        script: "docker compose -f ${DOCKER_COMPOSE_FILE} ps -q postgres | xargs docker inspect -f '{{range \$k,\$v := .NetworkSettings.Networks}}{{\$k}}{{end}}'",
+                        returnStdout: true
+                    ).trim()
+
+                    sh """
+                        docker run --rm --network ${networkName} \
+                            -v \$(pwd)/tests/performance:/scripts \
+                            grafana/k6 run /scripts/load-test.js
+                    """
+                }
+            }
+            post {
+                always {
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
+                }
+            }
+        }
     }
 }
 
