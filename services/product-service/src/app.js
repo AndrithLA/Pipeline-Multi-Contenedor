@@ -40,10 +40,13 @@ app.get('/health', (req, res) => {
     res.json({ status: 'healthy', timestamp: new Date().toISOString() });
 });
 
-app.listen(port, () => {
-    console.log(`Product Service running on port ${port}`);
-});
+if (require.main === module) {
+    app.listen(port, () => {
+        console.log(`Product Service running on port ${port}`);
+    });
+}
 
+module.exports = app;
     
 
 module.exports = app;

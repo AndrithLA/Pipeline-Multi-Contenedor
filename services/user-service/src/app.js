@@ -3,8 +3,8 @@ const { Pool } = require('pg');
 const redis = require('redis');
 const amqp = require('amqplib');
 
-    const app = express();
-    const port = process.env.PORT || 3001;
+const app = express();
+const port = process.env.PORT || 3001;
 
     // PostgreSQL con pool de conexiones
     const pool = new Pool({
@@ -134,8 +134,13 @@ const amqp = require('amqplib');
     });
 
     connectRabbitMQ();
-    app.listen(port, () => {
-        console.log(`User Service running on port ${port}`);
-    });
+    if (require.main === module) {
+        connectRabbitMQ();
+        app.listen(port, () => {
+            console.log(`User Service running on port ${port}`);
+        });
+    }
+
+    module.exports = { app, pool, redisClient };
 
     module.exports = { app, pool, redisClient };
