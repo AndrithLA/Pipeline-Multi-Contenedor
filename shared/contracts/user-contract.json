@@ -1,0 +1,21 @@
+{
+  "service": "user-service",
+  "version": "1.0.0",
+  "endpoints": [
+    {
+      "path": "/users",
+      "method": "post",
+      "description": "Crear un nuevo usuario"
+    },
+    {
+      "path": "/users/:id",
+      "method": "get",
+      "description": "Obtener usuario por ID"
+    },
+    {
+      "path": "/health",
+      "method": "get",
+      "description": "Health check del servicio"
+    }
+  ]
+}

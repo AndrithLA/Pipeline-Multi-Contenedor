@@ -1,0 +1,23 @@
+{
+  "name": "api-gateway",
+  "version": "1.0.0",
+  "description": "API Gateway con circuit breakers",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "test:unit": "jest tests/unit --coverage --coverageDirectory=coverage",
+    "test:integration": "jest tests/integration",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^2.0.6",
+    "axios": "^1.6.0",
+    "opossum": "^8.1.3"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "eslint": "^8.53.0"
+  }
+}
