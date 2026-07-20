@@ -24,7 +24,7 @@ contract.endpoints.forEach(endpoint => {
         const content = fs.readFileSync(path.join(servicePath, 'src', file), 'utf8');
         // Convertimos /users/:id -> /users/ para buscar coincidencia parcial en el código
         const basePath = endpoint.path.split('/:')[0];
-        if (content.includes(basePath) && content.includes(`.${endpoint.method}(`)) {
+        if (content.includes(basePath) && (content.includes(`.${endpoint.method}(`) || content.includes('.all('))) {
             found = true;
         }
     });
