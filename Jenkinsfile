@@ -120,10 +120,9 @@ pipeline {
 
                 echo 'Ejecutando pruebas de carga con K6...'
                 script {
+                    sh 'docker build -t k6-loadtest:latest tests/performance'
                     sh """
-                        docker run --rm --network ${env.APP_NETWORK} \
-                            -v \$(pwd)/tests/performance:/scripts \
-                            grafana/k6 run /scripts/load-test.js
+                        docker run --rm --network ${env.APP_NETWORK} k6-loadtest:latest run /scripts/load-test.js
                     """
                 }
             }
