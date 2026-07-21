@@ -114,7 +114,10 @@ pipeline {
         stage('Pruebas de Carga y Rendimiento') {
             steps {
                 echo 'Levantando entorno para pruebas de carga...'
-                sh "docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build"
+                retry(3) {
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build"
+                }
                 sh 'sleep 15'
 
                 script {
