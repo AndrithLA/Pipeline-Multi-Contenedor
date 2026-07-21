@@ -156,6 +156,74 @@ pipeline {
                 }
             }
         }
+
+        stage('Pruebas de Resiliencia') {
+            steps {
+                echo 'Probando resiliencia del sistema ante fallos de dependencias...'
+                retry(3) {
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build"
+                }
+                sh 'sleep 15'
+
+                script {
+                    env.APP_NETWORK = sh(
+                        script: "docker compose -f ${DOCKER_COMPOSE_FILE} ps -q postgres | xargs docker inspect -f '{{range \$k,\$v := .NetworkSettings.Networks}}{{\$k}}{{end}}'",
+                        returnStdout: true
+                    ).trim()
+
+                    sh """
+                        echo "Esperando servicios antes de iniciar pruebas de caos..."
+                        timeout 60 sh -c 'until docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -f http://user-service:3001/health; do sleep 2; done'
+                    """
+
+                    sh """
+                        echo "=== Estado normal: todo conectado ==="
+                        docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s http://user-service:3001/health
+                        echo ""
+
+                        echo "=== Simulando fallo de Redis ==="
+                        docker compose -f ${DOCKER_COMPOSE_FILE} stop redis
+                        sleep 5
+
+                        echo "Verificando que el sistema siga respondiendo..."
+                        RESPONSE=\$(docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s http://user-service:3001/health)
+                        echo "\$RESPONSE"
+                        echo "\$RESPONSE" | grep -q '"status":"degraded"' && echo "OK: sistema en modo degradado, sigue respondiendo" || (echo "FALLO: el sistema no se degrado correctamente" && exit 1)
+
+                        echo "=== Recuperando Redis ==="
+                        docker compose -f ${DOCKER_COMPOSE_FILE} start redis
+                        sleep 10
+
+                        echo "Verificando recuperacion completa..."
+                        docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -f http://user-service:3001/health
+
+                        echo ""
+                        echo "=== Simulando fallo de PostgreSQL ==="
+                        docker compose -f ${DOCKER_COMPOSE_FILE} stop postgres
+                        sleep 5
+
+                        echo "Verificando degradacion graceful..."
+                        RESPONSE2=\$(docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s http://user-service:3001/health)
+                        echo "\$RESPONSE2"
+                        echo "\$RESPONSE2" | grep -q '"status":"degraded"' && echo "OK: sistema en modo degradado, sigue respondiendo" || (echo "FALLO: el sistema no se degrado correctamente" && exit 1)
+
+                        echo "=== Recuperando PostgreSQL ==="
+                        docker compose -f ${DOCKER_COMPOSE_FILE} start postgres
+                        sleep 10
+
+                        echo "Verificando recuperacion completa del sistema..."
+                        timeout 30 sh -c 'until docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -f http://user-service:3001/health; do sleep 2; done'
+                        echo "Sistema completamente recuperado."
+                    """
+                }
+            }
+            post {
+                always {
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
+                }
+            }
+        }
     }
 }
 
