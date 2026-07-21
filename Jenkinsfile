@@ -54,7 +54,10 @@ pipeline {
         stage('Pruebas de Integración con Servicios Reales') {
             steps {
                 echo 'Levantando entorno completo de integración...'
-                sh "docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build"
+                retry(3) {
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build"
+                }
                 sh 'sleep 15'
 
                 script {
@@ -114,7 +117,17 @@ pipeline {
                     env.APP_NETWORK = networkName
 
                     sh """
+                        echo "Esperando API Gateway..."
                         timeout 60 sh -c 'until docker run --rm --network ${networkName} curlimages/curl -s -f http://api-gateway:3000/health; do sleep 2; done'
+
+                        echo "Esperando User Service..."
+                        timeout 60 sh -c 'until docker run --rm --network ${networkName} curlimages/curl -s -f http://user-service:3001/health; do sleep 2; done'
+
+                        echo "Esperando Product Service..."
+                        timeout 60 sh -c 'until docker run --rm --network ${networkName} curlimages/curl -s -f http://product-service:3002/health; do sleep 2; done'
+
+                        echo "Margen extra para que el circuit breaker se estabilice..."
+                        sleep 5
                     """
                 }
 
