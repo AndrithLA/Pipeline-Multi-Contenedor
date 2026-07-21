@@ -85,9 +85,17 @@ pipeline {
                 echo 'Ejecutando pruebas funcionales de integración...'
                 sh """
                     echo "=== Prueba: crear usuario via gateway ==="
-                    docker run --rm --network ${env.APP_NETWORK} curlimages/curl -f -X POST http://api-gateway:3000/users \
+                    HTTP_CODE=\$(docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -o /tmp/response.json -w "%{http_code}" -X POST http://api-gateway:3000/users \
                         -H "Content-Type: application/json" \
-                        -d '{"name":"CI Test User","email":"ci-test-'\$(date +%s)'@example.com"}'
+                        -d '{"name":"CI Test User","email":"ci-test-'\$(date +%s)'@example.com"}')
+                    echo "HTTP Status: \$HTTP_CODE"
+                    if [ "\$HTTP_CODE" != "201" ]; then
+                        echo "ERROR - respuesta del servidor:"
+                        docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -X POST http://api-gateway:3000/users \
+                            -H "Content-Type: application/json" \
+                            -d '{"name":"CI Test User 2","email":"ci-test-2-'\$(date +%s)'@example.com"}'
+                        exit 1
+                    fi
 
                     echo ""
                     echo "=== Prueba: listar productos ==="
