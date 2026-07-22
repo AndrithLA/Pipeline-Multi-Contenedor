@@ -130,6 +130,17 @@ services:
     profiles:
       - tools
 
+  prometheus:
+    build:
+      context: ..
+      dockerfile: docker/prometheus/Dockerfile
+    ports:
+      - "9090:9090"
+    networks:
+      - app-network
+    profiles:
+      - monitoring
+
 volumes:
   postgres_data:
   redis_data:

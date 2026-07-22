@@ -224,6 +224,48 @@ pipeline {
                 }
             }
         }
+
+        stage('Monitoreo de Métricas') {
+            steps {
+                echo 'Verificando monitoreo con Prometheus...'
+                retry(3) {
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} --profile app --profile monitoring up -d --build"
+                }
+                sh 'sleep 15'
+
+                script {
+                    env.APP_NETWORK = sh(
+                        script: "docker compose -f ${DOCKER_COMPOSE_FILE} ps -q postgres | xargs docker inspect -f '{{range \$k,\$v := .NetworkSettings.Networks}}{{\$k}}{{end}}'",
+                        returnStdout: true
+                    ).trim()
+
+                    sh """
+                        echo "Esperando API Gateway..."
+                        timeout 60 sh -c 'until docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -f http://api-gateway:3000/health; do sleep 2; done'
+
+                        echo "Generando trafico de prueba para tener metricas..."
+                        for i in 1 2 3 4 5; do
+                            docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s http://api-gateway:3000/health > /dev/null
+                        done
+
+                        echo "Verificando que el endpoint /metrics expone formato Prometheus..."
+                        docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s http://api-gateway:3000/metrics | grep -q 'http_requests_total' && echo "OK: metricas expuestas correctamente" || (echo "FALLO: no se encontraron metricas" && exit 1)
+
+                        echo "Esperando a que Prometheus este listo..."
+                        timeout 30 sh -c 'until docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -f http://prometheus:9090/-/ready; do sleep 2; done'
+
+                        echo "Verificando que Prometheus tiene el target api-gateway como UP..."
+                        docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s http://prometheus:9090/api/v1/targets | grep -q '"health":"up"' && echo "OK: Prometheus esta recolectando metricas del gateway" || (echo "FALLO: el target no esta up" && exit 1)
+                    """
+                }
+            }
+            post {
+                always {
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
+                }
+            }
+        }
     }
 
     post {
