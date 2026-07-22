@@ -47,7 +47,7 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmqctl", "status"]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 10s
       retries: 10
@@ -55,9 +55,6 @@ services:
     restart: on-failure:3
     networks:
       - app-network
-    profiles:
-      - core
-      - app
 
   user-service:
     build:
