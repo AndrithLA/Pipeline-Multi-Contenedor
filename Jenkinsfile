@@ -1,6 +1,14 @@
 pipeline {
     agent any
 
+    options {
+        // Evita que dos builds corran al mismo tiempo: comparten el mismo
+        // Docker daemon y los mismos nombres de contenedor/red/proyecto de
+        // compose, así que ejecutarlos en paralelo causa conflictos de nombre
+        // y contenedores huerfanos.
+        disableConcurrentBuilds()
+    }
+
     environment {
         APP_NAME = 'jenkins-microservices-app'
         DOCKER_COMPOSE_FILE = 'docker/docker-compose.test.yml'
@@ -270,9 +278,11 @@ pipeline {
         stage('Despliegue en Ambiente Efímero') {
             environment {
                 EPHEMERAL_PROJECT = "ephemeral-${env.BUILD_NUMBER}"
-                GATEWAY_PORT = '4000'
-                USER_PORT = '4001'
-                PRODUCT_PORT = '4002'
+                // Puertos en 0 = Docker asigna automáticamente un puerto libre del host,
+                // evitando colisiones con contenedores huérfanos de builds anteriores.
+                GATEWAY_PORT = '0'
+                USER_PORT = '0'
+                PRODUCT_PORT = '0'
             }
             steps {
                 echo "Desplegando ambiente efimero aislado: ${EPHEMERAL_PROJECT}"
@@ -288,6 +298,11 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
+                    def assignedPorts = sh(
+                        script: "docker compose -p ${EPHEMERAL_PROJECT} -f ${DOCKER_COMPOSE_FILE} port api-gateway 3000",
+                        returnStdout: true
+                    ).trim()
+
                     sh """
                         echo "Esperando servicios del ambiente efimero..."
                         timeout 60 sh -c 'until docker run --rm --network ${ephemeralNetwork} curlimages/curl -s -f http://api-gateway:3000/health; do sleep 2; done'
@@ -299,7 +314,7 @@ pipeline {
 
                         echo ""
                         echo "Ambiente efimero '${EPHEMERAL_PROJECT}' desplegado y verificado correctamente."
-                        echo "Puertos asignados -> Gateway: ${GATEWAY_PORT}, User: ${USER_PORT}, Product: ${PRODUCT_PORT}"
+                        echo "Puerto asignado dinamicamente para el gateway: ${assignedPorts}"
                     """
                 }
             }
