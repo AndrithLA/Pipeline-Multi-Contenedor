@@ -266,6 +266,50 @@ pipeline {
                 }
             }
         }
+
+        stage('Despliegue en Ambiente Efímero') {
+            environment {
+                EPHEMERAL_PROJECT = "ephemeral-${env.BUILD_NUMBER}"
+                GATEWAY_PORT = '4000'
+                USER_PORT = '4001'
+                PRODUCT_PORT = '4002'
+            }
+            steps {
+                echo "Desplegando ambiente efimero aislado: ${EPHEMERAL_PROJECT}"
+                retry(3) {
+                    sh "docker compose -p ${EPHEMERAL_PROJECT} -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans || true"
+                    sh "docker compose -p ${EPHEMERAL_PROJECT} -f ${DOCKER_COMPOSE_FILE} --profile app up -d --build"
+                }
+                sh 'sleep 15'
+
+                script {
+                    def ephemeralNetwork = sh(
+                        script: "docker compose -p ${EPHEMERAL_PROJECT} -f ${DOCKER_COMPOSE_FILE} ps -q postgres | xargs docker inspect -f '{{range \$k,\$v := .NetworkSettings.Networks}}{{\$k}}{{end}}'",
+                        returnStdout: true
+                    ).trim()
+
+                    sh """
+                        echo "Esperando servicios del ambiente efimero..."
+                        timeout 60 sh -c 'until docker run --rm --network ${ephemeralNetwork} curlimages/curl -s -f http://api-gateway:3000/health; do sleep 2; done'
+
+                        echo "Smoke test: verificando que el ambiente efimero responde..."
+                        docker run --rm --network ${ephemeralNetwork} curlimages/curl -s -f http://api-gateway:3000/health
+                        echo ""
+                        docker run --rm --network ${ephemeralNetwork} curlimages/curl -s -f http://product-service:3002/products
+
+                        echo ""
+                        echo "Ambiente efimero '${EPHEMERAL_PROJECT}' desplegado y verificado correctamente."
+                        echo "Puertos asignados -> Gateway: ${GATEWAY_PORT}, User: ${USER_PORT}, Product: ${PRODUCT_PORT}"
+                    """
+                }
+            }
+            post {
+                always {
+                    echo "Destruyendo ambiente efimero ${EPHEMERAL_PROJECT} (limpieza automatica)..."
+                    sh "docker compose -p ${EPHEMERAL_PROJECT} -f ${DOCKER_COMPOSE_FILE} down -v --remove-orphans || true"
+                }
+            }
+        }
     }
 
     post {

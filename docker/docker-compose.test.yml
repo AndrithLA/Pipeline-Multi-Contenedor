@@ -74,7 +74,7 @@ services:
       REDIS_PORT: 6379
       RABBITMQ_URL: amqp://admin:admin@rabbitmq
     ports:
-      - "3001:3001"
+      - "${USER_PORT:-3001}:3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,7 +95,7 @@ services:
     environment:
       PORT: 3002
     ports:
-      - "3002:3002"
+      - "${PRODUCT_PORT:-3002}:3002"
     networks:
       - app-network
     restart: unless-stopped
@@ -111,7 +111,7 @@ services:
       USER_SERVICE_URL: http://user-service:3001
       PRODUCT_SERVICE_URL: http://product-service:3002
     ports:
-      - "3000:3000"
+      - "${GATEWAY_PORT:-3000}:3000"
     depends_on:
       - user-service
       - product-service
