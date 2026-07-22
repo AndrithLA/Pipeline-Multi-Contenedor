@@ -56,7 +56,7 @@ pipeline {
                 echo 'Levantando entorno completo de integración...'
                 retry(3) {
                     sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
-                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build"
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} --profile app up -d --build"
                 }
                 sh 'sleep 15'
 
@@ -116,7 +116,7 @@ pipeline {
                 echo 'Levantando entorno para pruebas de carga...'
                 retry(3) {
                     sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
-                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build"
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} --profile app up -d --build"
                 }
                 sh 'sleep 15'
 
@@ -162,7 +162,7 @@ pipeline {
                 echo 'Probando resiliencia del sistema ante fallos de dependencias...'
                 retry(3) {
                     sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
-                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} up -d --build"
+                    sh "docker compose -f ${DOCKER_COMPOSE_FILE} --profile app up -d --build"
                 }
                 sh 'sleep 15'
 
@@ -223,6 +223,46 @@ pipeline {
                     sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
                 }
             }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline completado exitosamente.'
+            script {
+                def summary = """
+                    Pipeline exitoso: ${env.JOB_NAME} #${env.BUILD_NUMBER}
+                    Commit: ${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'local'}
+                    URL: ${env.BUILD_URL}
+                    Todos los stages pasaron: verificacion, contrato, build/test, integracion, carga y resiliencia.
+                """
+                writeFile file: 'pipeline-summary.txt', text: summary
+                archiveArtifacts artifacts: 'pipeline-summary.txt', allowEmptyArchive: true
+            }
+        }
+        failure {
+            echo 'Pipeline fallido. Ejecutando limpieza y rollback de entorno...'
+            script {
+                // Rollback: aseguramos que no queden contenedores ni volumenes huerfanos
+                // de ningun docker-compose de este proyecto, para que el proximo build
+                // arranque desde un estado limpio (equivalente al "kubectl rollout undo"
+                // del entorno real, adaptado a Docker Compose local).
+                sh "docker compose -f ${DOCKER_COMPOSE_FILE} down -v || true"
+                sh "docker image prune -f || true"
+
+                def failureSummary = """
+                    Pipeline fallido: ${env.JOB_NAME} #${env.BUILD_NUMBER}
+                    Commit: ${env.GIT_COMMIT ? env.GIT_COMMIT.take(7) : 'local'}
+                    Revisa los logs en: ${env.BUILD_URL}console
+                    Se ejecuto rollback automatico: entorno de contenedores limpiado.
+                """
+                writeFile file: 'pipeline-failure-summary.txt', text: failureSummary
+                archiveArtifacts artifacts: 'pipeline-failure-summary.txt', allowEmptyArchive: true
+            }
+        }
+        always {
+            echo 'Limpiando workspace...'
+            cleanWs()
         }
     }
 }
