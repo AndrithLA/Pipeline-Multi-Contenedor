@@ -47,14 +47,19 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
-      interval: 10s
-      timeout: 10s
-      retries: 6
+      # nc (netcat) valida el socket TCP directo en el puerto AMQP (5672) sin esperar la CLI/Erlang VM
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 5672 || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
       start_period: 30s
     restart: on-failure:3
     networks:
       - app-network
+    profiles:
+      - core
+      - app
+
   user-service:
     build:
       context: ../services/user-service
