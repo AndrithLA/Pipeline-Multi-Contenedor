@@ -47,15 +47,14 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:15672/api/health/checks/aliveness -u admin:admin || exit 1"]
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 40s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
     restart: on-failure:3
     networks:
       - app-network
-
   user-service:
     build:
       context: ../services/user-service
