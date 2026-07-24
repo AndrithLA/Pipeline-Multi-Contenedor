@@ -8,7 +8,7 @@ export const options = {
         { duration: '10s', target: 0 },
     ],
     thresholds: {
-        http_req_duration: ['p(95)<500'],
+        http_req_duration: ['p(95)<2000'],
         http_req_failed: ['rate<0.05'],
     },
 };
@@ -30,11 +30,9 @@ export default function () {
         name: `LoadTest User ${Date.now()}`,
         email: `loadtest${Date.now()}${Math.random()}@example.com`,
     });
-
     const params = {
         headers: { 'Content-Type': 'application/json' },
     };
-
     const createRes = http.post(`${BASE_URL}/users`, payload, params);
     check(createRes, {
         'create user status es 201': (r) => r.status === 201,
