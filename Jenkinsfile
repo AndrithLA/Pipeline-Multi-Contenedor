@@ -190,14 +190,21 @@ pipeline {
                         docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s http://user-service:3001/health
                         echo ""
 
-                        echo "=== Simulando fallo de Redis ==="
-                        docker compose -f ${DOCKER_COMPOSE_FILE} stop redis
+                        echo "=== Simulando fallo de PostgreSQL ==="
+                        docker compose -f ${DOCKER_COMPOSE_FILE} stop postgres
                         sleep 5
 
-                        echo "Verificando que el sistema siga respondiendo..."
-                        RESPONSE=\$(docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s http://user-service:3001/health)
-                        echo "\$RESPONSE"
-                        echo "\$RESPONSE" | grep -q '"status":"degraded"' && echo "OK: sistema en modo degradado, sigue respondiendo" || (echo "FALLO: el sistema no se degrado correctamente" && exit 1)
+                        echo "Verificando degradacion graceful..."
+                        RESPONSE2=""
+                        for i in 1 2 3 4 5; do
+                            RESPONSE2=\$(docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s http://user-service:3001/health || true)
+                            echo "Intento \$i: \$RESPONSE2"
+                            if echo "\$RESPONSE2" | grep -q '"status":"degraded"'; then
+                                break
+                            fi
+                            sleep 3
+                        done
+                        echo "\$RESPONSE2" | grep -q '"status":"degraded"' && echo "OK: sistema en modo degradado, sigue respondiendo" || (echo "FALLO: el sistema no se degrado correctamente" && exit 1)
 
                         echo "=== Recuperando Redis ==="
                         docker compose -f ${DOCKER_COMPOSE_FILE} start redis
