@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
   postgres:
     build:
@@ -22,7 +21,6 @@ services:
       - core
       - app
       - tools
-
   redis:
     image: redis:7-alpine
     command: redis-server --appendonly yes
@@ -38,7 +36,6 @@ services:
     profiles:
       - core
       - app
-
   rabbitmq:
     image: rabbitmq:3-management-alpine
     environment:
@@ -47,7 +44,6 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      # nc (netcat) valida el socket TCP directo en el puerto AMQP (5672) sin esperar la CLI/Erlang VM
       test: ["CMD-SHELL", "nc -z 127.0.0.1 5672 || exit 1"]
       interval: 5s
       timeout: 5s
@@ -59,7 +55,6 @@ services:
     profiles:
       - core
       - app
-
   user-service:
     build:
       context: ../services/user-service
@@ -88,7 +83,6 @@ services:
     restart: unless-stopped
     profiles:
       - app
-
   product-service:
     build:
       context: ../services/product-service
@@ -102,7 +96,6 @@ services:
     restart: unless-stopped
     profiles:
       - app
-
   api-gateway:
     build:
       context: ../services/api-gateway
@@ -121,7 +114,6 @@ services:
     restart: unless-stopped
     profiles:
       - app
-
   adminer:
     image: adminer:latest
     ports:
@@ -130,7 +122,6 @@ services:
       - app-network
     profiles:
       - tools
-
   prometheus:
     build:
       context: ..
@@ -141,12 +132,22 @@ services:
       - app-network
     profiles:
       - monitoring
-
+  jenkins:
+    image: jenkins/jenkins:lts
+    ports:
+      - "8091:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins_data:/var/jenkins_home
+    networks:
+      - app-network
+    profiles:
+      - ci
 volumes:
   postgres_data:
   redis_data:
   rabbitmq_data:
-
+  jenkins_data:
 networks:
   app-network:
     driver: bridge

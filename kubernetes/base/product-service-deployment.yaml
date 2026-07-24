@@ -51,6 +51,7 @@ metadata:
 spec:
   selector:
     app: product-service
+    version: green
   ports:
     - port: 3002
       targetPort: 3002
