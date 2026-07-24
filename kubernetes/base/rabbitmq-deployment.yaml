@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rabbitmq-secret
+  namespace: microservices
+type: Opaque
+stringData:
+  RABBITMQ_DEFAULT_USER: admin
+  RABBITMQ_DEFAULT_PASS: admin
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  namespace: microservices
+  labels:
+    app: rabbitmq
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      containers:
+        - name: rabbitmq
+          image: rabbitmq:3-management-alpine
+          ports:
+            - containerPort: 5672
+            - containerPort: 15672
+          envFrom:
+            - secretRef:
+                name: rabbitmq-secret
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          # Healthcheck ligero (rabbitmqctl status es muy pesado, aprendido
+          # en la Practica 1). start_period generoso porque RabbitMQ es
+          # el servicio mas lento en arrancar de todo el stack.
+          readinessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 10
+          livenessProbe:
+            exec:
+              command: ["rabbitmq-diagnostics", "-q", "ping"]
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 6
+          volumeMounts:
+            - name: rabbitmq-storage
+              mountPath: /var/lib/rabbitmq
+      volumes:
+        - name: rabbitmq-storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  namespace: microservices
+spec:
+  selector:
+    app: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: 5672
+    - name: management
+      port: 15672
+      targetPort: 15672
+  type: ClusterIP

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: microservices
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          command: ["redis-server", "--appendonly", "yes"]
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "25m"
+            limits:
+              memory: "128Mi"
+              cpu: "150m"
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: redis-storage
+              mountPath: /data
+      volumes:
+        - name: redis-storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: microservices
+spec:
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+  type: ClusterIP
