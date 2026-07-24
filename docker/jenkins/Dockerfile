@@ -10,6 +10,8 @@ RUN apt-get update && \
     apt-get install -y docker-ce-cli docker-compose-plugin && \
     curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    groupadd -f docker && \
+    usermod -aG docker jenkins
 
 USER jenkins
