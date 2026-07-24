@@ -47,14 +47,18 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:15672/api/health/checks/aliveness -u admin:admin || exit 1"]
-      interval: 10s
+      # nc (netcat) valida el socket TCP directo en el puerto AMQP (5672) sin esperar la CLI/Erlang VM
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 5672 || exit 1"]
+      interval: 5s
       timeout: 5s
-      retries: 3
+      retries: 10
       start_period: 30s
     restart: on-failure:3
     networks:
       - app-network
+    profiles:
+      - core
+      - app
 
   user-service:
     build:
