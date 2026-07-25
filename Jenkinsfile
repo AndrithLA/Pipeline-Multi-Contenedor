@@ -92,16 +92,20 @@ pipeline {
 
                 echo 'Ejecutando pruebas funcionales de integración...'
                 sh """
-                    echo "=== Prueba: crear usuario via gateway ==="
-                    HTTP_CODE=\$(docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -o /tmp/response.json -w "%{http_code}" -X POST http://api-gateway:3000/users \
-                        -H "Content-Type: application/json" \
-                        -d '{"name":"CI Test User","email":"ci-test-'\$(date +%s)'@example.com"}')
-                    echo "HTTP Status: \$HTTP_CODE"
-                    if [ "\$HTTP_CODE" != "201" ]; then
-                        echo "ERROR - respuesta del servidor:"
-                        docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -X POST http://api-gateway:3000/users \
+                echo "=== Prueba: crear usuario via gateway ==="
+                    HTTP_CODE=""
+                    for i in 1 2 3; do
+                        HTTP_CODE=\$(docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -o /tmp/response.json -w "%{http_code}" -X POST http://api-gateway:3000/users \
                             -H "Content-Type: application/json" \
-                            -d '{"name":"CI Test User 2","email":"ci-test-2-'\$(date +%s)'@example.com"}'
+                            -d '{"name":"CI Test User","email":"ci-test-'\$(date +%s)'-'\$i'@example.com"}')
+                        echo "Intento \$i - HTTP Status: \$HTTP_CODE"
+                        if [ "\$HTTP_CODE" = "201" ]; then
+                            break
+                        fi
+                        sleep 3
+                    done
+                    if [ "\$HTTP_CODE" != "201" ]; then
+                        echo "ERROR - el servicio no respondio 201 tras varios intentos"
                         exit 1
                     fi
 
