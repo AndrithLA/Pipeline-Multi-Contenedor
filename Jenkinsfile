@@ -271,7 +271,21 @@ pipeline {
                         timeout 30 sh -c 'until docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s -f http://prometheus:9090/-/ready; do sleep 2; done'
 
                         echo "Verificando que Prometheus tiene el target api-gateway como UP..."
-                        docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s http://prometheus:9090/api/v1/targets | grep -q '"health":"up"' && echo "OK: Prometheus esta recolectando metricas del gateway" || (echo "FALLO: el target no esta up" && exit 1)
+                        TARGET_UP="false"
+                        for i in 1 2 3 4 5 6; do
+                            if docker run --rm --network ${env.APP_NETWORK} curlimages/curl -s http://prometheus:9090/api/v1/targets | grep -q '"health":"up"'; then
+                                TARGET_UP="true"
+                                break
+                            fi
+                            echo "Target aun no esta up, esperando scrape... (intento \$i)"
+                            sleep 5
+                        done
+                        if [ "\$TARGET_UP" = "true" ]; then
+                            echo "OK: Prometheus esta recolectando metricas del gateway"
+                        else
+                            echo "FALLO: el target no esta up"
+                            exit 1
+                        fi
                     """
                 }
             }
